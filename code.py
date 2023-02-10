@@ -1,34 +1,50 @@
 import random
 from gurobipy import *
 
+
 def get_item_vars(model, item, num_items):
-  return [model.getVarByName(str(item) + "_" + str(i)) for i in num_items]
+  return [model.getVarByName(str(item) + "_" + str(i)) for i in range(num_items)]
 
-def get_bin_vars(model, bin, num_items):
-  return [model.getVarByName(str(i) + "_" + str(bin)) for i in num_items]
+def get_bin_vars(model, binn, num_items):
+  return [model.getVarByName(str(i) + "_" + str(binn)) for i in range(num_items)]
 
-def get_bin_vars_multiplied_by_item_weights(model, bin, items, num_items):
-  return [model.getVarByName(str(i) + "_" + str(bin)) * items[i] for i in num_items]
+def get_bin_vars_multiplied_by_item_weights(model, binn, items, num_items):
+  return [model.getVarByName(str(i) + "_" + str(binn)) * items[i] for i in range(num_items)]
 
 
 def optimum(items, capacity):
-  int_prog_model = Model()
+  env = Env(empty=True)
+  env.setParam("OutputFlag",0)
+  env.start()
 
-  obj = LinExpr()
+  int_prog_model = Model(env=env)
+
+  obj =  0
 
   # initiating variables
-  for item in len(items):
-    for bin in len(items):
-      x = int_prog_model.addVar(vtype=GRB.BINARY, name = str(item)+"_"+str(bin))
+  for item in range(len(items)):
+    for binn in range(len(items)):
+      int_prog_model.addVar(vtype=GRB.BINARY, name = str(item)+"_"+str(binn))
   
-  for item in len(items):
+  int_prog_model.update()
+  
+  for item in range(len(items)):
     int_prog_model.addConstr(sum(get_item_vars(int_prog_model, item, len(items))) == 1)
   
-  for bin in len(items):
-    int_prog_model.addConstr(sum(\
-      get_bin_vars_multiplied_by_item_weights(int_prog_model, bin, items, len(items))) < capacity)
+  bin_vars = []
+  for binn in range(len(items)):
+    bin_is_used_var = int_prog_model.addVar(vtype=GRB.BINARY, name = str(binn)+"_is_used")
+    bin_vars.append(bin_is_used_var)
+    obj += bin_is_used_var
+    int_prog_model.addConstr(sum(get_bin_vars_multiplied_by_item_weights(\
+      int_prog_model, binn, items, len(items))) <= capacity * bin_is_used_var)
     
-  # return 0
+
+  num_bins_used = sum(bin_vars)
+  int_prog_model.setObjectiveN(num_bins_used, GRB.MINIMIZE)
+  int_prog_model.optimize()
+
+  return int(sum([x.X for x in bin_vars]))
 
 
 def first_fit(items, capacity):
@@ -119,8 +135,8 @@ def run_tests(num_tests):
     num_items = i * 300 + 20
     items, capacity =  return_random_dataset(num_items)
     print("number of items:", num_items)
-    print("random test %d: first fit %d, first fit descending %d, best fit %d, best fit descending %d" % \
-      (i, first_fit(items, capacity), first_fit_desc(items, capacity), best_fit(items, capacity), best_fit_desc(items, capacity)))
+    print("random test %d: optimum %d, first fit %d, first fit descending %d, best fit %d, best fit descending %d" % \
+      (i, optimum(items,capacity), first_fit(items, capacity), first_fit_desc(items, capacity), best_fit(items, capacity), best_fit_desc(items, capacity)))
 
 run_tests(10)
 
@@ -133,7 +149,7 @@ capacity_ex1 = 15
 items_ex2 = [5,3,7,9,12,2,4,4,13]
 capacity_ex2 = 15
 
-
+# 
 # print("1st example")
 # print(first_fit(items_ex1, capacity_ex1))
 # print(first_fit_desc(items_ex1, capacity_ex1))
